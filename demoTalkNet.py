@@ -29,6 +29,7 @@ parser.add_argument('--minTrack',              type=int,   default=10,   help='N
 parser.add_argument('--numFailedDet',          type=int,   default=10,   help='Number of missed detections allowed before tracking is stopped')
 parser.add_argument('--minFaceSize',           type=int,   default=1,    help='Minimum face size in pixels')
 parser.add_argument('--cropScale',             type=float, default=0.40, help='Scale bounding box')
+parser.add_argument('--frameSkip',             type=int,   default=1,    help='Process every Nth frame for face detection')
 
 parser.add_argument('--start',                 type=int, default=0,   help='The start time of the video')
 parser.add_argument('--duration',              type=int, default=0,  help='The duration of the video, when set as 0, will extract the whole video')
@@ -56,7 +57,7 @@ if args.evalCol == True:
 	args.videoName = 'col'
 	args.videoFolder = args.colSavePath
 	args.savePath = os.path.join(args.videoFolder, args.videoName)
-	args.videoPath = os.path.join(args.videoFolder, args.videoName + '.mp4')
+	args.videoPath = glob.glob(os.path.join(args.videoFolder, args.videoName + '.*'))[0]
 	args.duration = 0
 	if os.path.isfile(args.videoPath) == False:  # Download video
 		link = 'https://www.youtube.com/watch?v=6GzxbrO0DHM&t=2s'
@@ -99,6 +100,11 @@ def inference_video(args):
 	flist.sort()
 	dets = []
 	for fidx, fname in enumerate(flist):
+		# Skip frames based on frameSkip parameter
+		if fidx % args.frameSkip != 0:
+			dets.append([])  # Add empty detection for skipped frames
+			continue
+			
 		image = cv2.imread(fname)
 		imageNumpy = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 		bboxes = DET.detect_faces(imageNumpy, conf_th=0.9, scales=[args.facedetScale])
