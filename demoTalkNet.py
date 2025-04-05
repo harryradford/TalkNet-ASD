@@ -24,6 +24,8 @@ parser.add_argument('--videoFolder',           type=str, default="demo",  help='
 parser.add_argument('--inputVideo',            type=str, default=None,   help='Path to input video file (if not in demo folder)')
 parser.add_argument('--pretrainModel',         type=str, default="pretrain_TalkSet.model",   help='Path for the pretrained TalkNet model')
 parser.add_argument('--ffmpegPath',            type=str, default="ffmpeg", help='Path to FFmpeg binary')
+parser.add_argument('--startTime',             type=float, default=None, help='Start time in seconds for processing a portion of the video')
+parser.add_argument('--endTime',               type=float, default=None, help='End time in seconds for processing a portion of the video')
 
 parser.add_argument('--nDataLoaderThread',     type=int,   default=10,   help='Number of workers')
 parser.add_argument('--facedetScale',          type=float, default=0.25, help='Scale factor for face detection, the frames will be scale to 0.25 orig')
@@ -302,12 +304,29 @@ def visualization(tracks, scores, args):
         vOut.write(image)
     vOut.release()
     
-    # Use the original audio from the input video
-    # This is the simplest approach and worked well in the original implementation
+    # Use the original audio from the input video, but only for the specified time range
+    start_time = args.startTime if args.startTime is not None else 0
+    end_time = args.endTime if args.endTime is not None else None
+    
+    # Create a temporary audio file for the specified time range
+    temp_audio = os.path.join(args.pyaviPath, 'temp_audio.wav')
+    if end_time is not None:
+        command = ("%s -y -i %s -threads %d -ss %.3f -to %.3f -ac 1 -vn -acodec pcm_s16le -ar 16000 %s -loglevel panic" % \
+            (args.ffmpegPath, args.videoPath, args.nDataLoaderThread, start_time, end_time, temp_audio))
+    else:
+        command = ("%s -y -i %s -threads %d -ss %.3f -ac 1 -vn -acodec pcm_s16le -ar 16000 %s -loglevel panic" % \
+            (args.ffmpegPath, args.videoPath, args.nDataLoaderThread, start_time, temp_audio))
+    subprocess.call(command, shell=True, stdout=None)
+    
+    # Combine video with the cropped audio
     command = ("%s -y -i %s -i %s -threads %d -c:v copy -c:a copy %s -loglevel panic" % \
-        (args.ffmpegPath, os.path.join(args.pyaviPath, 'video_only.avi'), args.videoPath, \
+        (args.ffmpegPath, os.path.join(args.pyaviPath, 'video_only.avi'), temp_audio, \
         args.nDataLoaderThread, os.path.join(args.pyaviPath,'video_out.avi'))) 
     output = subprocess.call(command, shell=True, stdout=None)
+    
+    # Clean up temporary audio file
+    if os.path.exists(temp_audio):
+        os.remove(temp_audio)
 
 def evaluate_col_ASD(tracks, scores, args):
 	txtPath = args.videoFolder + '/col_labels/fusion/*.txt' # Load labels
@@ -382,8 +401,23 @@ def split_video_into_segments(args):
     cap = cv2.VideoCapture(args.videoPath)
     fps = cap.get(cv2.CAP_PROP_FPS)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    duration = total_frames / fps
+    total_duration = total_frames / fps
     cap.release()
+    
+    # Handle start and end times
+    start_time = args.startTime if args.startTime is not None else 0
+    end_time = args.endTime if args.endTime is not None else total_duration
+    
+    # Validate time range
+    if start_time < 0:
+        start_time = 0
+    if end_time > total_duration:
+        end_time = total_duration
+    if start_time >= end_time:
+        raise ValueError("Start time must be less than end time")
+    
+    # Calculate duration of the portion to process
+    duration = end_time - start_time
     
     # Calculate number of segments based on CPU cores
     num_cores = multiprocessing.cpu_count()
@@ -400,13 +434,13 @@ def split_video_into_segments(args):
     # Create segment arguments
     segments = []
     for i in range(num_segments):
-        start_time = i * segment_duration
-        end_time = (i + 1) * segment_duration if i < num_segments - 1 else duration
+        segment_start = start_time + (i * segment_duration)
+        segment_end = start_time + ((i + 1) * segment_duration) if i < num_segments - 1 else end_time
         
         # Create a copy of args for this segment
         segment_args = copy.deepcopy(args)
-        segment_args.start = start_time
-        segment_args.duration = end_time - start_time
+        segment_args.start = segment_start
+        segment_args.duration = segment_end - segment_start
         segment_args.savePath = os.path.join(args.savePath, f'segment_{i}')
         segment_args.pyaviPath = os.path.join(segment_args.savePath, 'pyavi')
         segment_args.pyframesPath = os.path.join(segment_args.savePath, 'pyframes')
