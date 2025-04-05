@@ -292,7 +292,8 @@ def visualization(tracks, scores, args):
         vOut.write(image)
     vOut.release()
     
-    # Combine video with original audio
+    # Use the original audio from the input video
+    # This is the simplest approach and worked well in the original implementation
     command = ("ffmpeg -y -i %s -i %s -threads %d -c:v copy -c:a copy %s -loglevel panic" % \
         (os.path.join(args.pyaviPath, 'video_only.avi'), args.videoPath, \
         args.nDataLoaderThread, os.path.join(args.pyaviPath,'video_out.avi'))) 
@@ -376,7 +377,12 @@ def split_video_into_segments(args):
     
     # Calculate number of segments based on CPU cores
     num_cores = multiprocessing.cpu_count()
-    num_segments = max(1, num_cores - 1)  # Leave one core free
+    
+    # For 1-minute videos, limit to 6 threads maximum
+    # This provides a good balance between speed and overhead
+    # Leaves more CPU resources for other applications
+    max_threads = 6
+    num_segments = min(max(1, num_cores - 1), max_threads)
     
     # Calculate segment duration
     segment_duration = duration / num_segments
