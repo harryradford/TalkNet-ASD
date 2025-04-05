@@ -26,6 +26,7 @@ parser.add_argument('--pretrainModel',         type=str, default="pretrain_TalkS
 parser.add_argument('--ffmpegPath',            type=str, default="ffmpeg", help='Path to FFmpeg binary')
 parser.add_argument('--startTime',             type=float, default=None, help='Start time in seconds for processing a portion of the video')
 parser.add_argument('--endTime',               type=float, default=None, help='End time in seconds for processing a portion of the video')
+parser.add_argument('--outputCoords',          type=str, default=None,   help='Path to output JSON file containing active speaker coordinates')
 
 parser.add_argument('--nDataLoaderThread',     type=int,   default=10,   help='Number of workers')
 parser.add_argument('--facedetScale',          type=float, default=0.25, help='Scale factor for face detection, the frames will be scale to 0.25 orig')
@@ -287,6 +288,34 @@ def visualization(tracks, scores, args):
                 s = score[max(fidx - 2, 0): min(fidx + 3, len(score) - 1)] # average smoothing
                 s = numpy.mean(s)
                 faces[frame].append({'track':tidx, 'score':float(s),'s':track['proc_track']['s'][fidx], 'x':track['proc_track']['x'][fidx], 'y':track['proc_track']['y'][fidx]})
+    
+    # Save coordinates to JSON if output path is specified
+    if args.outputCoords is not None:
+        import json
+        # Convert numpy types to Python native types for JSON serialization
+        coords_data = []
+        for frame_idx, frame_faces in enumerate(faces):
+            frame_data = {
+                'frame': frame_idx,
+                'faces': []
+            }
+            for face in frame_faces:
+                face_data = {
+                    'track_id': int(face['track']),
+                    'score': float(face['score']),
+                    'x': float(face['x']),
+                    'y': float(face['y']),
+                    'size': float(face['s'])
+                }
+                frame_data['faces'].append(face_data)
+            coords_data.append(frame_data)
+        
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(args.outputCoords), exist_ok=True)
+        
+        # Save to JSON file
+        with open(args.outputCoords, 'w') as f:
+            json.dump(coords_data, f, indent=2)
     
     firstImage = cv2.imread(all_frames[0])
     fw = firstImage.shape[1]
