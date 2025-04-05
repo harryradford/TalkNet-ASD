@@ -22,6 +22,7 @@ parser = argparse.ArgumentParser(description = "TalkNet Demo or Columnbia ASD Ev
 parser.add_argument('--videoName',             type=str, default="001",   help='Demo video name')
 parser.add_argument('--videoFolder',           type=str, default="demo",  help='Path for inputs, tmps and outputs')
 parser.add_argument('--pretrainModel',         type=str, default="pretrain_TalkSet.model",   help='Path for the pretrained TalkNet model')
+parser.add_argument('--ffmpegPath',            type=str, default="ffmpeg", help='Path to FFmpeg binary')
 
 parser.add_argument('--nDataLoaderThread',     type=int,   default=10,   help='Number of workers')
 parser.add_argument('--facedetScale',          type=float, default=0.25, help='Scale factor for face detection, the frames will be scale to 0.25 orig')
@@ -193,12 +194,12 @@ def crop_video(args, track, cropFile):
 	audioStart  = (track['frame'][0]) / 25
 	audioEnd    = (track['frame'][-1]+1) / 25
 	vOut.release()
-	command = ("ffmpeg -y -i %s -async 1 -ac 1 -vn -acodec pcm_s16le -ar 16000 -threads %d -ss %.3f -to %.3f %s -loglevel panic" % \
-		      (args.audioFilePath, args.nDataLoaderThread, audioStart, audioEnd, audioTmp)) 
+	command = ("%s -y -i %s -async 1 -ac 1 -vn -acodec pcm_s16le -ar 16000 -threads %d -ss %.3f -to %.3f %s -loglevel panic" % \
+		      (args.ffmpegPath, args.audioFilePath, args.nDataLoaderThread, audioStart, audioEnd, audioTmp)) 
 	output = subprocess.call(command, shell=True, stdout=None) # Crop audio file
 	_, audio = wavfile.read(audioTmp)
-	command = ("ffmpeg -y -i %st.avi -i %s -threads %d -c:v copy -c:a copy %s.avi -loglevel panic" % \
-			  (cropFile, audioTmp, args.nDataLoaderThread, cropFile)) # Combine audio and video file
+	command = ("%s -y -i %st.avi -i %s -threads %d -c:v copy -c:a copy %s.avi -loglevel panic" % \
+			  (args.ffmpegPath, cropFile, audioTmp, args.nDataLoaderThread, cropFile)) # Combine audio and video file
 	output = subprocess.call(command, shell=True, stdout=None)
 	os.remove(cropFile + 't.avi')
 	return {'track':track, 'proc_track':dets}
@@ -294,8 +295,8 @@ def visualization(tracks, scores, args):
     
     # Use the original audio from the input video
     # This is the simplest approach and worked well in the original implementation
-    command = ("ffmpeg -y -i %s -i %s -threads %d -c:v copy -c:a copy %s -loglevel panic" % \
-        (os.path.join(args.pyaviPath, 'video_only.avi'), args.videoPath, \
+    command = ("%s -y -i %s -i %s -threads %d -c:v copy -c:a copy %s -loglevel panic" % \
+        (args.ffmpegPath, os.path.join(args.pyaviPath, 'video_only.avi'), args.videoPath, \
         args.nDataLoaderThread, os.path.join(args.pyaviPath,'video_out.avi'))) 
     output = subprocess.call(command, shell=True, stdout=None)
 
@@ -417,19 +418,19 @@ def process_segment(segment_args):
     os.makedirs(segment_args.pycropPath, exist_ok=True)
     
     # Extract frames for this segment
-    command = ("ffmpeg -y -i %s -qscale:v 2 -threads %d -ss %.3f -to %.3f -async 1 -r 25 %s -loglevel panic" % \
-        (segment_args.videoPath, segment_args.nDataLoaderThread, segment_args.start, 
+    command = ("%s -y -i %s -qscale:v 2 -threads %d -ss %.3f -to %.3f -async 1 -r 25 %s -loglevel panic" % \
+        (segment_args.ffmpegPath, segment_args.videoPath, segment_args.nDataLoaderThread, segment_args.start, 
          segment_args.start + segment_args.duration, segment_args.videoFilePath))
     subprocess.call(command, shell=True, stdout=None)
     
     # Extract audio
-    command = ("ffmpeg -y -i %s -qscale:a 0 -ac 1 -vn -threads %d -ar 16000 %s -loglevel panic" % \
-        (segment_args.videoFilePath, segment_args.nDataLoaderThread, segment_args.audioFilePath))
+    command = ("%s -y -i %s -qscale:a 0 -ac 1 -vn -threads %d -ar 16000 %s -loglevel panic" % \
+        (segment_args.ffmpegPath, segment_args.videoFilePath, segment_args.nDataLoaderThread, segment_args.audioFilePath))
     subprocess.call(command, shell=True, stdout=None)
     
     # Extract frames
-    command = ("ffmpeg -y -i %s -qscale:v 2 -threads %d -f image2 %s -loglevel panic" % \
-        (segment_args.videoFilePath, segment_args.nDataLoaderThread, 
+    command = ("%s -y -i %s -qscale:v 2 -threads %d -f image2 %s -loglevel panic" % \
+        (segment_args.ffmpegPath, segment_args.videoFilePath, segment_args.nDataLoaderThread, 
          os.path.join(segment_args.pyframesPath, '%06d.jpg')))
     subprocess.call(command, shell=True, stdout=None)
     
