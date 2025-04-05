@@ -21,6 +21,7 @@ parser = argparse.ArgumentParser(description = "TalkNet Demo or Columnbia ASD Ev
 
 parser.add_argument('--videoName',             type=str, default="001",   help='Demo video name')
 parser.add_argument('--videoFolder',           type=str, default="demo",  help='Path for inputs, tmps and outputs')
+parser.add_argument('--inputVideo',            type=str, default=None,   help='Path to input video file (if not in demo folder)')
 parser.add_argument('--pretrainModel',         type=str, default="pretrain_TalkSet.model",   help='Path for the pretrained TalkNet model')
 parser.add_argument('--ffmpegPath',            type=str, default="ffmpeg", help='Path to FFmpeg binary')
 
@@ -72,8 +73,16 @@ if args.evalCol == True:
 		subprocess.call(cmd, shell=True, stdout=None)
 		os.remove(args.videoFolder + '/col_labels.tar.gz')	
 else:
-	args.videoPath = glob.glob(os.path.join(args.videoFolder, args.videoName + '.*'))[0]
-	args.savePath = os.path.join(args.videoFolder, args.videoName)
+	if args.inputVideo is not None:
+		# Use the provided input video path
+		args.videoPath = args.inputVideo
+		# Set savePath to a directory with the same name as the video (without extension)
+		video_name = os.path.splitext(os.path.basename(args.inputVideo))[0]
+		args.savePath = os.path.join(args.videoFolder, video_name)
+	else:
+		# Use the existing behavior as fallback
+		args.videoPath = glob.glob(os.path.join(args.videoFolder, args.videoName + '.*'))[0]
+		args.savePath = os.path.join(args.videoFolder, args.videoName)
 
 def scene_detect(args):
 	# CPU: Scene detection, output is the list of each shot's time duration
