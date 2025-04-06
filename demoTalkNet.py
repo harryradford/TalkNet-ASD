@@ -23,6 +23,7 @@ parser.add_argument('--videoName',             type=str, default="001",   help='
 parser.add_argument('--videoFolder',           type=str, default="demo",  help='Path for inputs, tmps and outputs')
 parser.add_argument('--inputVideo',            type=str, default=None,   help='Path to input video file (if not in demo folder)')
 parser.add_argument('--pretrainModel',         type=str, default="pretrain_TalkSet.model",   help='Path for the pretrained TalkNet model')
+parser.add_argument('--modelDir',              type=str, default=None,   help='Directory containing the model files')
 parser.add_argument('--ffmpegPath',            type=str, default="ffmpeg", help='Path to FFmpeg binary')
 parser.add_argument('--startTime',             type=float, default=None, help='Start time in seconds for processing a portion of the video')
 parser.add_argument('--endTime',               type=float, default=None, help='End time in seconds for processing a portion of the video')
@@ -44,10 +45,19 @@ parser.add_argument('--colSavePath',           type=str, default="/data08/col", 
 
 args = parser.parse_args()
 
-if os.path.isfile(args.pretrainModel) == False: # Download the pretrained model
-    Link = "1AbN9fCf9IexMxEKXLQY2KYBlb-IhSEea"
-    cmd = "gdown --id %s -O %s"%(Link, args.pretrainModel)
-    subprocess.call(cmd, shell=True, stdout=None)
+if os.path.isfile(args.pretrainModel) == False:
+    if args.modelDir is not None:
+        # Look for the model in the specified directory
+        model_path = os.path.join(args.modelDir, "pretrain_TalkSet.model")
+        if os.path.isfile(model_path):
+            args.pretrainModel = model_path
+        else:
+            raise FileNotFoundError(f"Model file not found in {args.modelDir}. Please ensure the model file is included with your application.")
+    else:
+        # Download the pretrained model
+        Link = "1AbN9fCf9IexMxEKXLQY2KYBlb-IhSEea"
+        cmd = "gdown --id %s -O %s"%(Link, args.pretrainModel)
+        subprocess.call(cmd, shell=True, stdout=None)
 
 if args.evalCol == True:
 	# The process is: 1. download video and labels(I have modified the format of labels to make it easiler for using)
